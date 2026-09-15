@@ -10,7 +10,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from .api import create_client
+from .api import create_client, parse_bearer_token
 from .config import configure_logging, get_config
 from .tools.access_keys import AccessKeyTools
 from .tools.environments import EnvironmentTools
@@ -43,14 +43,21 @@ class SemaphoreMCPServer:
 
         Args:
             semaphore_url: SemaphoreUI API URL
-            semaphore_token: SemaphoreUI API token
+            semaphore_token: SemaphoreUI API token. When set it is always used
+                and client tokens are ignored. Optional with the HTTP transport:
+                without it, the ``Authorization: Bearer`` header sent by the MCP
+                client is forwarded to SemaphoreUI.
             host: Host to bind to (for HTTP transport)
             port: Port to listen on (for HTTP transport)
         """
         # Use provided values or fall back to config
         self.url = semaphore_url or get_config("SEMAPHORE_URL")
         self.token = semaphore_token or get_config("SEMAPHORE_API_TOKEN")
-        self.semaphore = create_client(self.url, self.token)
+        # The provider reads the current MCP request lazily, so self.mcp may be
+        # created afterwards.
+        self.semaphore = create_client(
+            self.url, self.token, token_provider=self.get_request_token
+        )
 
         # Initialize FastMCP with host/port for HTTP transport
         self.mcp = FastMCP("semaphore", host=host, port=port)
@@ -173,6 +180,24 @@ class SemaphoreMCPServer:
 
     # Tool methods have been moved to dedicated tool classes
 
+    def get_request_token(self) -> Optional[str]:
+        """Return the bearer token the MCP client sent on the current request.
+
+        With the HTTP transport every tool call runs inside a request context
+        that carries the incoming HTTP request; its ``Authorization: Bearer``
+        header is forwarded to SemaphoreUI when no static token is configured
+        (the API client never consults this with a static token). Returns None
+        outside a request, on the stdio transport (no HTTP headers), or when
+        the header is absent.
+        """
+        try:
+            request = self.mcp.get_context().request_context.request
+        except (ValueError, LookupError):
+            return None
+        if request is None:
+            return None
+        return parse_bearer_token(request.headers.get("authorization"))
+
     def run(self, transport: str = "stdio"):
         """Run the MCP server.
 
@@ -180,6 +205,18 @@ class SemaphoreMCPServer:
             transport: Transport type - "stdio" or "http"
         """
         logger.info(f"Starting FastMCP server for SemaphoreUI at {self.url}")
+        if not self.token:
+            if transport == "http":
+                logger.info(
+                    "No SEMAPHORE_API_TOKEN configured: forwarding the "
+                    "Authorization: Bearer token sent by each MCP client"
+                )
+            else:
+                logger.warning(
+                    "No SEMAPHORE_API_TOKEN configured and the stdio transport "
+                    "carries no HTTP headers: SemaphoreUI requests will be "
+                    "unauthenticated"
+                )
         if transport == "http":
             logger.info(
                 f"HTTP transport on {self.mcp.settings.host}:{self.mcp.settings.port}"

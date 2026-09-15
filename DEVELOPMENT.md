@@ -44,6 +44,8 @@ semaphore-mcp --transport http --host 0.0.0.0 --port 8000 \
   --url http://localhost:3000 --token your-token
 ```
 
+`--token` is optional in HTTP mode: without it, the `Authorization: Bearer <token>` header sent by the MCP client is forwarded to SemaphoreUI (`SemaphoreMCPServer.get_request_token`, wired into the API client as `token_provider`). A configured token always wins and client tokens are ignored. STDIO mode has no HTTP headers and always needs a token.
+
 ### Environment Variables
 
 You can also configure via environment variables:

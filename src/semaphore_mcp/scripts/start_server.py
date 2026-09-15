@@ -20,7 +20,11 @@ def parse_args():
     )
     parser.add_argument(
         "--token",
-        help="SemaphoreUI API token (default: from SEMAPHORE_API_TOKEN env)",
+        help=(
+            "SemaphoreUI API token (default: from SEMAPHORE_API_TOKEN env). "
+            "Optional with the http transport: without it, the Authorization: "
+            "Bearer header sent by the MCP client is forwarded instead"
+        ),
         default=os.environ.get("SEMAPHORE_API_TOKEN"),
     )
     parser.add_argument(
