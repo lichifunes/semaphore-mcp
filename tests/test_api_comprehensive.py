@@ -1104,6 +1104,9 @@ class TestTemplateCRUDOperations:
         "allow_parallel_tasks": True,
         "allow_override_branch_in_task": True,
         "runner_tag": "fast",
+        # Added in SemaphoreUI v2.19
+        "executor_image": "registry.example.com/ansible:latest",
+        "jwt_params": {"audience": "vault"},
     }
 
     def _update(self, mock_client, **kwargs):
